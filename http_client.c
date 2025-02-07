@@ -79,7 +79,6 @@ int main(int argc, char *argv[])
 	strncpy(check, argv[1], 4);
 	int ishttp = strcmp(check, "http");
 	if (ishttp != 0){
-		printf("INVALIDPROTOCOL\n");
 		fwrite("INVALIDPROTOCOL", sizeof(char), 15, file);
 		return 1;
 	}
@@ -105,7 +104,7 @@ int main(int argc, char *argv[])
 	}*/
 
 	if (argc != 2) {
-	    fprintf(stderr,"usage: client hostname\n");
+	    //fprintf(stderr,"usage: client hostname\n");
 	    exit(1);
 	}
 
@@ -113,9 +112,9 @@ int main(int argc, char *argv[])
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	printf("result: %s\n ",argv[1]);
+	//printf("result: %s\n ",argv[1]);
 	if ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
-		fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rv));
+		//fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rv));
 		return 1;
 	}
 	/*if ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
@@ -125,12 +124,15 @@ int main(int argc, char *argv[])
 
 	// loop through all the results and connect to the first we can
 	for(p = servinfo; p != NULL; p = p->ai_next) {
+
+		// create socket for connection
 		if ((sockfd = socket(p->ai_family, p->ai_socktype,
 				p->ai_protocol)) == -1) {
 			perror("client: socket");
 			continue;
 		}
 
+		// attempt to connect
 		if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
 			close(sockfd);
 			perror("client: connect");
@@ -140,22 +142,23 @@ int main(int argc, char *argv[])
 		break;
 	}
 
+	// fails to connect
 	if (p == NULL) {
-		fprintf(stderr, "client: failed to connect\n");
-		return 2;
+		fwrite("NOCOMMECTION", sizeof(char), 12, file);
+		return 1;
 	}
 
 	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
 			s, sizeof s);
-	printf("client: connecting to %s\n", s);
+	//printf("client: connecting to %s\n", s);
 
 	freeaddrinfo(servinfo); // all done with this structure
 
 	char request[MAXDATASIZE];
-	printf("path: %s\n", path);
-	printf("hostname: %s\n", hostname);
-	snprintf(request, sizeof(request), "GET /%s HTTP/1.0\r\nHost: %s\r\nAccept: */*\r\nConnection: Keep-Alive\r\n", path, hostname);
-	printf("check Get format: %s\n", request);
+	//printf("path: %s\n", path);
+	//printf("hostname: %s\n", hostname);
+	snprintf(request, sizeof(request), "GET /%s HTTP/1.0\r\nHost: %s\r\nAccept: */*\r\nConnection: Keep-Alive\r\n\r\n", path, hostname);
+	//printf("check Get format: %s\n", request);
 
 	// send the request
 	if (send(sockfd, request, strlen(request), 0) == -1){
@@ -163,7 +166,7 @@ int main(int argc, char *argv[])
 		close(sockfd);
 		return 3;
 	}
-	printf("client: GET request sent\n");
+	//printf("client: GET request sent\n");
 
 	/*while ((numbytes = recv(sockfd, buf, MAXDATASIZE -1, 0)) > 0){
 		buf[numbytes] = '\0';	// numm terminate the response
@@ -173,18 +176,32 @@ int main(int argc, char *argv[])
 	if (numbytes == -1) {
 		perror("recv");
 	}*/
-	printf("getting file ready\n");
+	//printf("getting file ready\n");
 
 
 	char buf2[MAXDATASIZE];
 	int numbytes_buf;
-	printf("writing to file\n");
+	//printf("writing to file\n");
 
 	while ((numbytes_buf = recv(sockfd, buf2, MAXDATASIZE-1, 0)) > 0) {
+		char status_line[MAXDATASIZE];
+
+		sscanf(buf2, "%49[^\r\n]", status_line);
 		buf2[numbytes_buf] = '\0';
-		fwrite(buf2, sizeof(char), numbytes_buf, file);
+
+		if (strstr(status_line, "404 Not Found") != NULL){
+			fwrite("FILENOTFOUND", sizeof(char), 12, file);
+			return 4;
+		}
+		else {
+
+			fwrite(buf2, sizeof(char), numbytes_buf, file);
+
 	}
-	printf("finish writing\n");
+	}
+	
+
+
 
 	/*if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
 	    perror("recv");
